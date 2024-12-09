@@ -1,0 +1,7 @@
+\subsection{Eiffel}
+
+Our base set of Eiffel style guidelines are those documented in \emph{Eiffel: The Language (ETL)} and \emph{Object-Oriented Software Construction}, both by Bertrand Meyer. In particular, Appendix A (Style Guidelines, pps. 483-496) of ETL contains an excellent, to-the-point summary of good Eiffel style.
+
+As discussed in the semantic properties paper, properties are used to augment these style guidelines. They are embedded in Eiffel code through a regularized use of structured Eiffel comments and indexing clauses.
+
+File-scoped comments are documented using indexing clauses as normal for Eiffel code. Modules in Eiffel are classes, so module-scoped specification should be located in the class comment region, just after the class declaration, but before the inherit region of an Eiffel class. Feature and variable structured comments using semantic properties are located in the standard places for feature Eiffel comments, since variables are features---just after the feature declaration.

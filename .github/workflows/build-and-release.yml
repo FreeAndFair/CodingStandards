@@ -1,0 +1,48 @@
+# .github/workflows/build-and-release.yml
+# Author: Daniel M. Zimmerman
+# Created: 2024-12-09
+# Modified: 2024-12-09
+
+# This workflow runs "make" on the root Makefile of the repository
+# to ensure that the build proceeds without errors, when a commit
+# is pushed to the main branch. If the build succeeds, the workflow
+# updates the "latest" release with the book PDF and build log.
+
+name: Build/Release Coding Standards
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build-release:
+    name: Build Coding Standards and Update Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Packages
+        run: sudo apt-get install build-essential epstool
+
+      - name: Install/Restore TeXLive Environment
+        uses: teatimeguest/setup-texlive-action@v3
+        with:
+          packages: |
+            scheme-full
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Build Document
+        run: latexmk --pdf coding_standards
+
+      - name: Update Release
+        if: ${{ github.ref_name == 'main' }}
+        uses: notpeelz/action-gh-create-release@v5.0.1
+        with:
+          strategy: replace
+          tag: latest
+          tag-message: The latest build of the main branch.
+          body: This is the latest build of the Free & Fair Coding Standards from the repository main branch.
+          title: Latest
+          prerelease: true
+          files: |
+            coding_standards.pdf

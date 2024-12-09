@@ -1,0 +1,586 @@
+\subsection{Java}
+
+\definecolor{keywordcolor}{rgb}{0.5,0,0.33}
+\definecolor{identifiercolor}{rgb}{0,0,0.75}
+\definecolor{commentcolor}{rgb}{0.3,0.3,0.3} 
+
+\lstdefinestyle{custom-java}{language={java},showstringspaces={false},
+  basicstyle={\ttfamily\mdseries},
+  keywordstyle={\color{keywordcolor}},
+  keywordstyle={[2]\color{black}\bfseries},
+  keywordstyle={[3]\color{black}\bfseries},
+  identifierstyle={\color{identifiercolor}},
+  commentstyle={\color{commentcolor}},
+  frame=lines}
+
+\lstset{style=custom-java}
+
+The following are Java coding \textit{recommendations.} It is not necessary to follow them to the letter, but we have found it helpful to always keep them in mind. We first give general recommendations, and then specific code style guidelines that can be enforced by static checkers (for which configurations are supplied in the code standard repository\footnote{not yet, but they can/will be}).
+%
+\subsubsection{General Recommendations}
+\label{sec:java:general}
+
+\begin{itemize}
+    \item
+    Do not use the \texttt{*} form of \texttt{import}. Be precise about what you are importing. Check that all declared imports are actually used.
+    
+    \emph{Rationale:} Otherwise, readers of your code will have a hard time understanding its context and dependencies. Some people even prefer not using \texttt{import} at all (thus requiring that every class reference be fully dot-qualified), which avoids all possible ambiguity at the expense of requiring more source code changes if package names change; we, however, aren't that freaky.
+
+    \item 
+    When sensible, consider writing a \texttt{main()} method for the principal class in each program file. The \texttt{main()} method should provide a simple unit test or demo. For many classes in distributed/networked systems there isn't a means by which you can build self-contained testing, so don't go crazy trying to make a \texttt{main()} method for everything.
+
+    \emph{Rationale:} Forms a basis for testing. Also provides usage examples.
+
+    \item 
+    For stand-alone application programs, the class with the \texttt{main()} method should be in a separate source file from those containing ``normal'' classes.
+    
+    \emph{Rationale:} Hard-wiring an application program in one of its component class files limits the potential for class reuse.
+
+    \item 
+    If you can conceive of someone else implementing a class's functionality differently, define an interface rather than an abstract class. Generally, use abstract classes only when they are ``partially abstract''; i.e., they implement some functionality that must be shared across all subclasses.
+
+    \emph{Rationale:} Interfaces are more flexible than abstract classes. They support multiple inheritance and can be used as ``mix-ins'' in otherwise unrelated classes.
+
+    \item
+    Consider carefully whether any class should implement the \texttt{Cloneable} and/or \texttt{Serializable} interfaces.
+
+    \emph{Rationale:} These are ``magic'' interfaces in Java; they automatically add possibly-needed functionality only if so requested, but also often require additional work to ensure correct/expected behavior (e.g., overriding the default \texttt{clone()} method to perform a ``deep'' clone). 
+
+    \item 
+    Declare a class as \texttt{final} only if it is a subclass or implementation of a class or interface declaring all of its non-implementation-specific methods (a similar principle applies to the declaration of \texttt{final} methods).
+
+    \emph{Rationale:} Making a class \texttt{final} means that no one will ever get a chance to reimplement its functionality. Defining it instead to be a subclass of a base that is not \texttt{final} means that someone at least gets a chance to subclass the base with an alternate implementation, which will essentially always happen in the long run.
+
+    \item
+    Never declare instance fields as \texttt{public}.
+
+    \emph{Rationale:} The standard OO reasons. Making fields \texttt{public} gives up control over internal class structure. Also, if fields are \texttt{public}, methods can never assume that they have valid values; there is no way to enforce class invariants in the presence of \texttt{public} fields.
+
+    \item 
+    Never rely on implicit initializers for instance fields (such as the fact that reference variables are initialized to \texttt{null}).
+
+    \emph{Rationale:} Minimizes initialization errors.
+
+    \item
+    Minimize \texttt{static}s (except for \texttt{static final} constants).
+
+    \emph{Rationale:} \texttt{static} fields act like globals in non-OO languages. They make methods more context-dependent, hide possible side-effects, sometimes present synchronized access problems. and are a source of fragile, non-extensible constructions. Also, neither \texttt{static} fields nor \texttt{static} methods are overridable in any useful sense in subclasses. There are legitimate uses for \texttt{static} fields and methods (e.g., for certain concurrent implementations, \texttt{static} locks or counters that also take advantage of atomics may make sense), but they are few and far between.
+
+    \item 
+    Generally prefer \texttt{long} to \texttt{int}, and \texttt{double} to \texttt{float}. But use \texttt{int} for compatibility with standard Java constructs and classes (the primary example is array indexing and all of the things this implies about, for example, the maximum sizes of arrays).
+
+    \emph{Rationale:} Arithmetic overflow and underflow can be 4 billion times less likely with \texttt{long}s than with \texttt{int}s; similarly, fewer precision problems occur with \texttt{double}s than with \texttt{float}s. On the other hand, because of limitations in Java atomicity guarantees, use of \texttt{long}s and \texttt{double}s must be synchronized in some cases where unsynchronized use of \texttt{int}s and \texttt{float}s would be safe.
+
+    \item
+    Use \texttt{final} and/or comment conventions (see the \texttt{modifies} and \texttt{values} properties) to indicate whether instance fields that never have their values changed after construction are intended to be constant (immutable) for the lifetime of the object (as opposed to those that just happen not to get assigned in a class, but could in a child class).
+
+    \emph{Rationale:} Access to immutable instance fields generally does not require any synchronization control, but access to mutable fields generally does.
+
+    \item 
+    Generally prefer \texttt{protected} to \texttt{private}.
+
+    \emph{Rationale:} Unless you have a good reason for sealing in a particular strategy for using a field or method, you might as well plan for change via subclassing. On the other hand, this almost always entails more work. Basing other code in a base class around \texttt{protected} fields and methods is harder, since you have to either loosen or check assumptions about their properties. (Note that in Java, \texttt{protected} methods are also accessible from unrelated classes in the same package. There is hardly ever any reason to exploit this, though.)
+
+    \item 
+    Avoid unnecessary \texttt{public} instance field access and update methods. Write \texttt{public} \texttt{get}/\texttt{set}-style methods only when they are intrinsic aspects of functionality.
+
+    \emph{Rationale:} Most instance fields in most classes must maintain values that are dependent on those of other instance fields. Allowing them to be read or written in isolation makes it harder to ensure that consistent sets of values are always used.
+
+    \item 
+    Minimize direct internal access to instance fields inside methods. Use \texttt{protected} access and update methods instead (or sometimes \texttt{public} ones if they exist anyway).
+
+    \emph{Rationale:} While inconvenient and sometimes overkill, this allows you to vary synchronization and notification policies associated with field access and change in the class and/or its subclasses, which is otherwise a serious impediment to extensiblity in concurrent OO programming.
+
+    \item 
+    Avoid giving a field the same name as one inherited from a parent class.
+
+    \emph{Rationale:} This is usually an error. If not, there must be a very good reason, which should always be explained with a \texttt{hides} property.
+
+    \item 
+    Declare arrays as \texttt{Type[] arrayName} rather than \texttt{Type arrayName[]}.
+
+    \emph{Rationale:} The second form exists solely for incorrigible C programmers, and makes code less easily readable. The use of "[]" is part of the type, so it should be syntactically adjacent to the rest of the type name.
+
+    \item
+    Ensure that non-\texttt{private} \texttt{static} fields have sensible values, and that non-\texttt{private} \texttt{static} methods can be executed sensibly, even if no instances are ever created. Use static intitializers (\texttt{static { \ldots }}) if necessary.
+
+    \emph{Rationale:} You cannot assume that non-private statics will be accessed only after instances are constructed.
+
+    \item 
+    Write methods that only do ``one thing''. In particular, separate out methods that change object state from those that just rely upon it. A classic example: in a \texttt{Stack} class, prefer having two methods \texttt{Object top()} and \texttt{void removeTop()} to having the single method \texttt{Object pop()} that does both.
+
+    \emph{Rationale:} This simplifies (sometimes, makes even possible) concurrency control and subclass-based extensions.
+    
+    \item 
+    Define return types as void unless they return results that are not (easily) accessible otherwise (i.e., refrain from ever writing \texttt{return this;}).
+
+    \emph{Rationale:} While convenient, the resulting method cascades (\texttt{a.meth1().meth2().meth3()}) can be sources of synchronization problems and other failed expectations about the states of target objects.
+
+    \item 
+    Avoid overloading methods on argument type (overriding on arity, as in having a one-argument version versus a two-argument version of a method with the same name, is fine). If you need to specialize behavior according to the class of an argument, consider instead choosing a general type for the nominal argument type (often \texttt{Object}, \texttt{Serializable} or \texttt{Cloneable}) and using conditionals that check \texttt{instanceof} (or, reflectively, \texttt{isAssignableFrom()}). Alternatives include techniques such as double-dispatching or, often best, reformulating methods (and/or their arguments) to remove dependence on exact argument type.
+
+    \emph{Rationale:} Java method resolution is static, based on the source code types at compile time rather than the actual argument types at runtime. This is compounded in the case of non-\texttt{Object} types with coercion charts. In both cases, most programmers have not committed the matching rules to memory. The results can be counterintuitive, and thus the source of subtle errors. For example, try to predict the output of this code. Then compile and run it:
+
+    \begin{lstlisting}
+    class Classifier {
+          String identify(Object x) {
+            return "object";
+        }
+    
+        String identify(Integer x) {
+            return "integer";
+        }
+    }    
+
+    class Relay {
+      String relay(Object obj) { 
+        return (new Classifier()).identify(obj);
+      }
+    }
+
+    public class App {
+      public static void main(String [] args) {
+        Relay relayer = new Relay();
+        Integer i = new Integer(17);
+        System.out.println(relayer.relay(i));
+      }
+    }    
+    \end{lstlisting}
+
+    \item 
+    Declare concurrency property values for at least all \texttt{public} methods. Describe the assumed invocation context and/or rationale for existence or lack of synchronization. If you don't know the concurrency semantics of your method, make it \texttt{synchronized}.
+
+    \emph{Rationale:} In the absence of planning out a set of concurrency control policies, declaring methods as \texttt{synchronized} at least guarantees safety (though not necessarily liveness) in concurrent contexts (every Java program is concurrent to at least some minimal extent). With full synchronization of all methods, the methods may lock up, but the object can never enter into randomly inconsistent states (and thus engage in stupidly or even dangerously wrong behavior) due to concurrency conflicts. If you are worried about efficiency problems due to synchronization, learn enough about concurrent OO programming to plan out more efficient and/or less deadlock-prone policies (i.e., read ``Concurrent Programming in Java'' by Doug Lea).
+
+    \item 
+    Prefer synchronized methods to synchronized blocks.
+
+    \emph{Rationale:} Better encsapsulation; less prone to subclassing snags; can be more efficient.
+
+    \item 
+    If you override \texttt{Object.equals()}, also override \texttt{Object.hashCode()}, and vice-versa.
+
+    \emph{Rationale:} Essentially all collection classes (sets, maps, etc.) and other utilities that group or compare objects in ways depending on equality rely on the guarantee that, for two objects \texttt{a} and \texttt{b}, \texttt{a.equals(b)} only if \texttt{a.hashCode() == b.hashCode()} (that is, if two objects are equivalent, they must have equal hash codes). If two objects are equivalent but their hash codes don’t match (as they will not with the default \texttt{hashCode()}, which just returns an object ID), collection classes will not work as you expect them to (or, in some cases, at all). While it is a good idea to override \texttt{hashCode()} \emph{well}, so that classes that use them for actual hashing will work efficiently, it suffices for correct functionality to override \texttt{hashCode()} so that it always returns a constant (meaning that any two objects are potentially equivalent and an \texttt{equals()} check must always be done). 
+
+    \item 
+    Override \texttt{readObject()} and \texttt{writeObject()} if a \texttt{Serializable} class relies on any state that could differ across processes, including, in particular, hash codes and transient fields.
+
+    \emph{Rationale:} Otherwise, objects of the class will not transport properly.
+
+    \item 
+    If you think that \texttt{clone()} may be called on a class you write, then explicitly define it (and declare the class to implement \texttt{Cloneable}).
+
+    \emph{Rationale:} The default shallow-copy version of \texttt{clone()} might not do what you want (and, in fact, does not in most cases).
+
+    \item 
+    Always document the fact that a method invokes \texttt{wait()}.
+
+    \emph{Rationale:} Clients may need to take special actions to avoid nested monitor calls.
+
+    \item
+    Initialize all (reasonable) fields in all constructors, or do not initialize any fields in any constructors (rely on explicit or implicit initialization in field declarations) and always explicitly call the superclass constructor.
+
+    \emph{Rationale:} If you don't initialize it, you don't know what value it really holds. Consistency is the key in this rule so that a reviewer/user/tool doesn't have to search around for every initialization.
+
+    \item 
+    Whenever reasonable, define a default (no-argument) constructor so objects can be created via \texttt{Class.newInstance()}.
+
+    \emph{Rationale:} This allows classes of types unknown at compile time to be dynamically loaded and instantiated. Reflection alleviates the need for no-argument constructors somewhat, but many classes that dynamically instantiate other classes at runtime still depend on their presence.
+
+    \item 
+    Prefer abstract methods in base classes to those with default no-op implementations. Also, if there is a common default implementation, consider instead writing it as a \texttt{protected} method so that subclass authors can write a one-line implementation to call the default.
+
+    \emph{Rationale:} The Java compiler will force subclass authors to implement abstract methods, avoiding problems that occur when they forget to do so but should have.
+
+    \item 
+    Always use method \texttt{equals()} instead of operator \texttt{==} when comparing objects. In particular, do not use \texttt{==} to compare \texttt{String}s.
+
+    \emph{Rationale:} If someone defined an \texttt{equals()} method to compare objects, then they want you to use it. Otherwise, the default implementation of \texttt{Object.equals()} is just to use \texttt{==}.
+
+    \item 
+    Never use \texttt{suspend()}/\texttt{resume()} pairs to implement synchronization with threads.
+
+    \emph{Rationale:} The \texttt{suspend()} and \texttt{resume()} methods are inherently fragile, and were deprecated 
+    decades ago for that reason.
+
+    \item 
+    Always embed \texttt{wait()} calls in \texttt{while} loops that re-wait if the condition being waited for does not hold.
+
+    \emph{Rationale:} When a \texttt{wait()} wakes up, there is no guarantee that the condition it is waiting for holds (or ever held).
+
+    \item 
+    Use \texttt{notifyAll()} instead of \texttt{notify()}.
+
+    \emph{Rationale:} Classes that use only \texttt{notify()} can normally only support at most one kind of wait condition across all methods in the class and all possible subclasses.
+
+    \item 
+    Declare a local variable only at that point in the code where you know what its initial value should be.
+
+    \emph{Rationale:} Minimizes bad assumptions about values of variables. Of course, you should know about the initial values of most local variables at the beginning of the method. Only one-off (temporary, loop, etc.) variables should be declared within the body of a method.
+
+    \item 
+    Name temporary and loop variables appropriately.
+
+    \emph{Rationale:} Lets the reader immediately know that the variable in question doesn't have a legitimate value unless it is within the code block of its declaration.
+
+    \item 
+    Declare and initialize a new local variable rather than reusing (reassigning) an existing one whose value happens to no longer be used at that program point.
+
+    \emph{Rationale:} Minimizes bad assumptions about values of variables.
+
+    \item
+    Assign \texttt{null} to any reference variable that is no longer being used. This includes, especially, elements of arrays.
+
+    \emph{Rationale:} Enables the Java garbage collector to do its job. Also, causes fast-failing \texttt{NullPointerException}s (rather than unpredictable behavior) if the code makes bad assumptions about whether reference variables have valid values.
+
+    \item 
+    Avoid assignments (``\texttt{=}'') inside \texttt{if} and \texttt{while} conditions.
+
+    \emph{Rationale:} These are almost always typos. The Java compiler catches cases where ``\texttt{=}'' should have been ``\texttt{==}'', except when the variable is (or is automatically coercible to) a \texttt{boolean}.
+
+    \item
+    Use \texttt{boolean} values (or values automatically coercible to \texttt{boolean}) directly in \texttt{if} and \texttt{while} conditions; that is, prefer ``\texttt{boolvar}'' to ``\texttt{boolvar == true}'' and ``\texttt{!boolvar}'' to ``\texttt{boolvar == false}''. This also applies to expressions with \texttt{boolean} values.
+
+    \emph{Rationale:} The extra \texttt{==} is redundant, and makes undetectable typos like the ones described in the previous recommendation more likely.
+
+    \item 
+    Document cases where the return value of a called method is ignored.
+
+    \emph{Rationale:} These are usually errors. If it is intentional, make the intent clear. A simple way to do this is: \texttt{int unused = obj.methodReturningInt(args);}
+
+    \item
+    Ensure that there is ultimately a catch for all unchecked exceptions that can be dealt with.
+
+    \emph{Rationale:} Java allows you to not bother declaring or catching some common easily-handled exceptions, such as \texttt{java.util.NoSuchElementException}. Declare and catch them anyway. It'll make your code more robust.
+
+    \item 
+    Embed casts in conditionals. For example: \texttt{C cx = null; if (x instanceof C) cx = (C) x; else evasiveAction();}
+
+    \emph{Rationale:} This forces you to consider what to do if the object is not an instance of the intended class, rather than just generating a \texttt{ClassCastException}.
+
+    \item
+    Document fragile constructions used solely for the sake of optimization.
+
+    \emph{Rationale:} These constructions may not be easily understandable to anyone reading your code in the future; also, since they are optimizations based on the behavior of the Java virtual machine, they may need to be updated as Java virtual machine behavior evolves.
+
+    \item
+    Do not require 100\% conformance to rules of thumb such as the ones listed here!
+
+    \emph{Rationale:} Java allows you to program in ways that do not conform to these rules for good reason. Sometimes they are the only reasonable ways to implement things. And some of these rules make programs less efficient than they might otherwise be, so they are meant to be conscientiously broken when performance is an issue.
+
+\end{itemize}
+
+\subsubsection{Style Guidelines}
+
+Unlike the general recommendations of \autoref{sec:java:general}, which we encourage \emph{all} Java programmers working on any type of project to follow except when there is good reason not to, the following style guidelines are optional. We use them on our projects for the reasons described, but different development teams have different styles and different sensibilities, and they may not work for everyone. 
+
+That being said, these recommendations are phrased as normative guidelines; for our internal development work, they are.
+
+\paragraph{Tabs, Spacing and Braces}
+
+\begin{itemize}
+
+    \item 
+    The ``tab'' character (\texttt{\textbackslash{}t}) may not appear in any source file, unless it is part of a string literal (that is, you define a string that contains a ``\texttt{\textbackslash{}t}'' in it for user interaction or other purposes). 
+
+    \emph{Rationale:} Tab characters
+lead to inconsistent code appearance in different editors/IDEs; in
+addition, because tabs are invisible, it is impossible for you to tell
+whether what you have at the beginning of a line is (for example) 6
+spaces or 3 tab characters.
+
+    \item 
+    The standard indentation width is 2 spaces. 
+    
+    \emph{Rationale:} It is the most
+commonly used standard indentation width and strikes a nice balance
+between use of horizontal space and logical delineation of code
+blocks.
+
+    \item 
+    Spacing is enforced between operators and operands (i.e., ``\texttt{a +
+  b}'' rather than ``\texttt{a+b}''), between commas and entities that
+follow them (i.e., ``\texttt{int the\_x, boolean the\_y}'' rather than
+``\texttt{int the\_x,boolean the\_y}''), and in a number of other
+places. The exception is parentheses, such as in method parameter
+lists (i.e., ``\texttt{public void foo()}'' rather than ``\texttt{public
+  void foo ( )}''. 
+  
+    \emph{Rationale:} This spacing generally makes identifiers
+easier to see, and code therefore easier to read.
+
+    \item 
+    Brace placement can be done in either of the two commonly-accepted
+ways: with the opening brace on the same line as a
+declaration/statement (\autoref{fig:sameline}) or with the opening brace on the next
+line (\autoref{fig:nextline}). Within a given project, only one of these two styles may be used. 
+
+
+    \begin{figure}
+    \begin{center}
+    \begin{minipage}{0.5\textwidth}
+    \small
+    \begin{lstlisting}
+      public void m() {
+        if (my_flag) {
+          // do something
+        } else { 
+          // do something else
+        }
+      }
+    \end{lstlisting}
+    \vspace{-12pt}
+    \end{minipage}
+    \end{center}
+    \caption{The ``same line'' method of brace placement.}
+    \label{fig:sameline}
+    \vspace{18pt}
+    \end{figure}
+    
+    \begin{figure}
+    \begin{center}
+    \begin{minipage}{0.5\textwidth}
+    \small
+    \begin{lstlisting}
+      public void m()
+      {
+        if (my_flag)
+        {
+          // do something
+        } 
+        else
+        {
+          // do something else
+        }
+      }
+    \end{lstlisting}
+    \vspace{-12pt}
+    \end{minipage}
+    \end{center}
+    \caption{The ``next line'' method of brace placement.}
+    \label{fig:nextline}
+    \end{figure}
+    
+    \emph{Rationale:} Consistency makes code easier to comprehend.
+
+CheckStyle files and Eclipse format files are\footnote{Actually ``will be,'' if we end up deciding to use these tools.} provided for both brace
+styles; they may be modified to change the standard indentation width
+from 2 to another value, but no other changes to the spacing
+guidelines are permitted.
+
+\end{itemize}
+
+\paragraph{Usage of \texttt{final} Modifier} 
+    The Java \texttt{final} modifier must be used on every method
+parameter (unconditionally), as well as on every field and local
+variable that will in fact remain unchanged during execution. Static analysis tools using our configurations\footnote{Again, if we decide we're using them on our project.} will warn you if the \texttt{final}
+modifier has been omitted from a field that appears
+final.
+
+Note that because static analysis tools cannot predict how you
+will use fields and local variables in code you have not written yet,
+you may see a lot of \texttt{final}-related warnings early. You can
+safely ignore warnings about non-\texttt{final} fields and local
+variables when you have not yet written all the code that uses those
+fields and local variables.
+
+    \textit{Rationale:} by marking method parameters \texttt{final}, you completely
+eliminate bugs that result from accidentally assigning values to them
+(something that is almost never intentional, and is always
+unintuitive). Also, every \texttt{final} field and local variable is
+one that you can effectively ignore when debugging your code.
+
+\paragraph{Method, Field, Parameter and Variable Naming}
+
+The following rules apply to the naming of various Java entities. In
+all cases, field names should be as self-documenting as possible. This
+may involve making them longer than you're used to; that's OK, since
+modern IDEs have auto-completion and modern compilers and runtime
+environments don't care about identifier lengths.
+%
+\begin{itemize}
+\item Methods are named \texttt{inCamelCase}; that is, according to
+  standard Java convention.
+\item \texttt{static final} fields (constants) are named
+  \texttt{IN\_ALL\_CAPS\_WITH\_UNDERSCORES}; that is, according to
+  standard Java convention. However, their names may not start with
+  \texttt{MY\_}, \texttt{THE\_}, or any of the other ``special''
+  prefixes described below.
+\item Instance fields are named like \texttt{my\_fie1d\_nam3}; that
+  is, all lowercase letters and numbers, starting with \texttt{my\_}
+  and with ``words'' separated by underscores.\footnote{Note that
+    ``my\_fie1d\_nam3'', and similar ``l33tsp3ak'' field names
+    (\url{http://en.wikipedia.org/wiki/L33t}), are generally not good
+    choices; this example is meant solely to illustrate that numbers
+    are allowed in instance field names.}
+\item Method parameters are named like
+  \texttt{a/an/the/some\_name} or \texttt{thing\_1/2/3}; that is,
+  all lowercase letters and numbers with ``words'' separated by
+  underscores, either starting with \texttt{a\_}, \texttt{an\_},
+  \texttt{the\_} or \texttt{some\_} or ending with a single-digit
+  number (1--9).\footnote{You can't go higher than 9, but you
+    shouldn't have that many method parameters anyway.}
+\item Local variables are named \texttt{variable\_name}; that is, just
+  like instance fields but with no leading \texttt{my\_} (they also
+  may not start with \texttt{a\_}, \texttt{an\_}, \texttt{the\_} or
+  \texttt{some\_}, to differentiate them from method parameters).
+\item Except for \texttt{static final} field names and method names,
+  uppercase letters are \emph{never} used in Java identifiers.
+\end{itemize}
+%
+\emph{Rationale:} There are several reasons for this naming scheme. First, it
+prevents you from accidentally shadowing variables since local
+variables, method parameters, and instance fields are forbidden from
+having identical names. Second, it makes it obvious when you are
+manipulating object state (\texttt{my\_}, indicating that a field
+``belongs to'' its containing object) or static state (\texttt{CAPS}),
+which can affect later method calls or other threads, rather than
+local state, which cannot affect anything other than the current
+thread. Finally, it makes object-oriented analysis easier (the field
+and parameter names flow well in English) and makes debugging easier
+(you can immediately identify what kind of state an identifier
+represents).
+
+\paragraph{Documentation}
+
+\emph{Every} class, method, and field---not just the \texttt{public}
+ones---must have \emph{complete} Javadoc documentation. For more
+information on Javadoc, see the Oracle tutorial on writing Javadoc
+comments at
+\url{http://java.sun.com/j2se/javadoc/writingdoccomments/index.html}. 
+
+In addition to full Javadoc, every source file should have a
+non-Javadoc header comment identifying it as belonging to a specific
+project/fileset. For example, the code
+shown in \autoref{fig:header} would be a reasonable start for a class
+called \texttt{Example} (this also obeys the import rules described below).
+
+\begin{figure}[t]
+\begin{center}
+\begin{minipage}{0.95\textwidth}
+\small
+\begin{lstlisting}
+/*
+ * Java Naming and Style Guidelines
+ * Copyright (C) 2011-13 Daniel M. Zimmerman
+ * Copyright (C) 2024 Free & Fair
+ * See "LICENSE.md" for license information
+ */
+
+package mypackage;
+
+import java.util.List;
+import java.util.Set;
+
+import javax.swing.JFrame;
+
+import mypackage.util.UsefulClass;
+
+/**
+ * Example is a class that conforms to the Naming and 
+ * Style Guidelines for Java you are reading right now.
+ *
+ * @author Daniel M. Zimmerman
+ * @version 1.5
+ */
+public class Example
+{
+  // code for class Example goes here
+}
+\end{lstlisting}
+\end{minipage}
+\vspace{-12pt}
+\end{center}
+\caption{A conforming source file, including imports and class
+  Javadoc but no code.}
+\label{fig:header}
+\vspace{12pt}
+\end{figure}
+
+\emph{Rationale:} Everything has to be documented somehow. Having a
+consistent header comment across all files in a project makes it easy
+to identify files as part of that project, and provides a single point
+of reference for copyright/license information. Using Javadoc for all
+in-code documentation enforces consistency within that documentation
+and reduces the amount of time you have to spend deciding whether
+entities need Javadoc comments. It also means that you don't have to
+rewrite/modify comments when you change protection levels of entities
+in your code during refactoring.
+
+\paragraph{Import and Package Organization}
+
+Import and package statements should be organized for readability,
+according to the following rules. Most IDEs will do this organization
+for you automatically.
+%
+\begin{itemize}
+\item The package statement, if any, appears immediately after the
+  header comment of each source file and before any import statements.
+\item All import statements appear after the package statement (or
+  header comment, in the absence of a package statement) of each
+  source file and before the class Javadoc comment.
+\item Groups of imports are separated by a single blank line.
+\item Imports are listed in alphabetical order within their groups.
+\item Imports from \texttt{java.} packages, if any, are declared in the first group.
+\item Imports from \texttt{javax.} packages, if any, are declared in the next group.
+\item Other imports are declared in the next group (you can optionally
+  make multiple groups of these, as you see fit, but this should be done consistently across all source files in the project).
+\end{itemize}
+
+\emph{Rationale:} Consistency is important for understanding code, and this applies to import declarations as well. Given the general rule about not using the ``*'' form of \texttt{import}, this means that every source file in a project will list all its dependencies in the same, well-defined order.
+
+\paragraph{Code Organization}
+
+Code should be organized according to information hiding and
+\texttt{static} modifiers as follows (this is enforced by CheckStyle when using the coding standard's associated rules):
+%
+\begin{itemize}
+\item All fields are declared before all constructors.
+\item All constructors are declared before all other methods.
+\item All \texttt{static} fields are declared before all
+  non-\texttt{static} fields.
+\item All \texttt{static} methods are declared before all
+  non-\texttt{static} methods.
+\item All inner and nested classes are declared after all fields and
+  methods.
+\item Among the same type of entity (constructors, instance methods,
+  static methods, instance fields, static fields), the order for
+  information hiding modifiers should be \texttt{public}, then
+  \texttt{protected}, then package/default,\footnote{You generally
+    don't want to use the default access modifier anyway.} then
+  \texttt{private}.
+\end{itemize}
+
+\emph{Rationale:} Having all classes organized in the same consistent fashion makes it easy to find any particular type of construct when reading the code, and also makes code review easier by grouping the constructs that need different ``kinds'' of review (e.g., \texttt{public} APIs may have different review criteria than \texttt{private} helper methods).
+
+\paragraph{Miscellaneous}
+
+The following typical coding issues are automatically detected by the
+tool configurations that accompany this standard:
+%
+\begin{itemize}
+\item Too many exit points from methods. A method should typically
+  have only one exit point (that is, zero or one \texttt{return}
+  statements). The exception to this rule is \texttt{equals} methods,
+  where it is very common to short-circuit the return value.
+\item Nested \texttt{if} statements, or an abundance of
+  \texttt{if}/\texttt{case} statements in a single method. In general,
+  this means that your logic needs to be reworked into something
+  simpler and perhaps broken into multiple methods.
+\item Exceptionally long constructors and methods.
+\item Exceptionally long classes. 
+\item Magic numbers (numeric constants used outside of \texttt{static
+    final} declarations). In general, you should declare symbolic
+  constants when necessary (e.g., \texttt{public static final int}
+  \texttt{NUM\_PRIMARY\_COLORS = 3}). However, you should \emph{never}
+  declare symbolic constants of the form ``\texttt{public static final
+    int SIX = 6}'' to appease the static checking system; such constants
+  do not make the code any easier to understand and will definitely be
+  caught by your instructor.
+\item Magic strings (string constants that are used more than once in
+  the same source file).
+\end{itemize}
+
+The static checkers detect many other coding issues as well; in some
+cases, their suggestions can be ignored, but in most cases you will
+want to follow them. Use your best judgement.
