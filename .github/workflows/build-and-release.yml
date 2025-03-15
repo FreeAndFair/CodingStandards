@@ -23,7 +23,7 @@ jobs:
         run: sudo apt-get install build-essential epstool
 
       - name: Install/Restore TeXLive Environment
-        uses: teatimeguest/setup-texlive-action@v3
+        uses: FreeAndFair/setup-texlive-action@v3
         with:
           packages: |
             scheme-full
@@ -36,7 +36,7 @@ jobs:
 
       - name: Update Release
         if: ${{ github.ref_name == 'main' }}
-        uses: notpeelz/action-gh-create-release@v5.0.1
+        uses: FreeAndFair/action-gh-create-release@v5.0.1
         with:
           strategy: replace
           tag: latest
