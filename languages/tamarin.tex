@@ -1,3 +1,328 @@
+% Language Definition for Tamarin highlighting
+
+\definecolor{keywordcolor}{rgb}{0.5,0,0.33}
+\definecolor{identifiercolor}{rgb}{0,0,0.75}
+\definecolor{commentcolor}{rgb}{0.3,0.3,0.3} 
+
+\lstdefinelanguage{tamarin}{
+    morekeywords={let, rule, role, senc, Fr, In, Out},
+    sensitive=true,
+    morecomment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    morestring=[b]"
+}
+
+\lstdefinestyle{custom-tamarin}{language={tamarin},showstringspaces={false},
+  basicstyle={\ttfamily\mdseries},
+  keywordstyle={\color{keywordcolor}},
+  keywordstyle={[2]\color{black}\bfseries},
+  keywordstyle={[3]\color{black}\bfseries},
+  identifierstyle={\color{identifiercolor}},
+  commentstyle={\color{commentcolor}},
+  frame=lines}
+
+\lstset{style=custom-tamarin, upquote=true}
+
 \subsection{Tamarin}
 
-To be written.
+The \href{https://tamarin-prover.com/}{Tamarin Prover} (hereafter, simply ``Tamarin'') verifies security properties of cryptographic protocols that are specified using idealized abstractions of cryptographic primitives (e.g., hashes, symmetric ciphers, asymmetric ciphers). Tamarin protocol specifications are called \emph{theories}, and the tool supports two primary modes for writing them: \emph{rules-based}, where protocol actions are specified using rules that are triggered when certain facts are established in the environment, and where groups of rules (more about this later) represent the behaviors of protocol roles; and \emph{process-based}, where each protocol role is written as an individual sequential process (or a collection of such) in a language called SAPIC+. The Tamarin tool transforms SAPIC+ processes into sets of rules, so that verification is always carried out on rules-based theories. 
+
+As of this writing (April 2025), unless you have a compelling reason to use SAPIC+ process-based specifications, we recommend writing specifications using Tamarin's native rules-based syntax. The tooling around SAPIC+ is still new and has some shortcomings, most notably that when it translates processes into rules for verification, the resulting rules are quite difficult for humans to understand; this is fine when Tamarin is able to discharge all its proof obligations automatically, but significantly increases the difficulty involved in understanding counterexamples and guiding proofs manually. That having been said, many of the guidelines we provide here are applicable to both the SAPIC+ and native rule-based syntaxes.
+
+\subsubsection{Naming and Typing}
+
+While Tamarin's rule-based syntax is untyped,\footnote{SAPIC+ variables can and should be typed, which is helpful both for sanity-checking SAPIC+ processes and when SAPIC+ is translated to a typed verification language like ProVerif. However, within Tamarin itself, the types are always erased in translation to Tamarin's native rules and have no effect on theory semantics.} it does require specific prefixes for certain variable sorts: \texttt{\textasciitilde}~for values that are ``fresh'' (i.e., have newly-created values that are unknown to the adversary); \texttt{\$}~for ``public'' values that are assumed to be known to the adversary; \texttt{\%}~for natural numbers; and \texttt{\#}~for temporal values (the timepoints at which events occur). It is essential to use these prefixes correctly; a security proof carried out on a rule set where a value that should be public was not marked public, for example, may turn out to be incorrect.
+
+After the required prefixes, Tamarin is quite flexible with respect to identifier names; they must start with a letter or number, can contain underscores after the first character, can be of arbitrary length, and cannot be Tamarin reserved words.
+
+Our recommendations for identifier naming in Tamarin are as follows:
+\begin{itemize}
+
+\item Use single capital letters or capitalized words, or the same with underscore/number ``subscripts'', for variables that represent the identities of individual protocol actors. These should be meaningful (e.g., \texttt{A} or \texttt{Alice} for Alice, \texttt{V\_1} or \texttt{Voter\_1} for Voter \#1) and consistent (i.e., the same identifier is used for the same actor, or role, every time it is referenced). 
+
+\item Use \texttt{CamelCaseDescriptions} as fact names (event names, in SAPIC+), with some exceptions we will describe later. A fact name must start with an uppercase letter in Tamarin anyway, and camel case has good readability. \emph{Persistent facts} (those that, once established, remain in the environment thereafter) are denoted in Tamarin with a \texttt{!} prefix, and are thus visually distinct from \emph{linear facts} (those that remain in the environment only until they are consumed) and \emph{action facts}/\emph{SAPIC+ events} (those that are not visible to rules, but exist at specific timepoints in the execution trace for use by lemmas that specify security properties). However, linear facts and action facts have no enforced visual distinctiveness from each other, so names should be chosen carefully to minimize confusion between them.
+
+\item Use \texttt{CamelCaseNames} for rules and SAPIC+ processes. In the case of rules, also use numbers (and potentially additional information to describe specific ``branches'' of a role's operation, if the state machine implemented by its rules is not linear) as necessary to convey sequencing. For example, the sequence of rules executed by an Initiator role might be named \texttt{Initiator1}, \texttt{Initiator2}, etc. Rules that belong to the same protocol role should be named according to that role, and should have the optional \texttt{[role=\ldots]} tag to allow Tamarin to display them together in its sequence diagrams; that is, each rule that is part of the Initiator role should start with the declaration \texttt{rule InitiatorX [role="Initiator"]:} (for the correct sequence number \texttt{X} of the rule). Typically, you will also want to establish a fact with a name like \texttt{InitiatorXComplete} at the end of rule \texttt{InitiatorX}, so that rules can be properly (and obviously) sequenced.
+
+\item For action facts (events) that are created for use in source lemmas (to assist the Tamarin prover in determining the possible sources for specific messages), use \texttt{ALL\_CAPS\_NAMES} that indicate whether they relate to input or output messages, the role they relate to, and optionally the specific rule and data they relate to. For example, an action fact that indicates that the Initiator outputs a specific message \texttt{X} containing a specific nonce \texttt{\textasciitilde{}n} in its second rule (\texttt{Initiator2}) could be named \texttt{OUT\_INITIATOR\_2} or \texttt{OUT\_INITIATOR\_2\_X\_n}.
+
+\item For variables representing other pieces of protocol data (messages, keys), use some systematic method of naming that is legal and that minimizes confusion with any of the entities named using the above recommendations.
+
+\end{itemize}
+
+\subsubsection{Formatting}
+
+Tamarin is completely flexible about formatting; extra spaces, line breaks, tabs, etc.~have no semantic meaning in Tamarin. However, it is important for readability to use uniform formatting methods for rules, processes, restrictions, and lemmas. The following recommendations reflect our preferences for such, but we do not claim that they are special in any other sense; use any consistent formatting rules that you choose.
+
+\begin{itemize}
+
+\item Use an indentation width of 2 for every indentation level.
+
+\item Indent the statements of rules as follows:
+
+\begin{itemize}
+
+    \item Place the rule declaration flush left (no indentation).
+
+    \item Indent the \texttt{let} statement (if any) and the three rule components (left-hand side, right-hand side, action facts) at the same depth (one level of indentation).
+
+    \item Place each variable assignment (after the first) in a \texttt{let} statement and each fact (after the first) in a rule component on its own line, aligned with the previous variable assignment or fact.
+
+    \item Place opening and closing brackets in rule components either on lines by themselves, or on lines with facts, but pick one of those and do it consistently (this is analogous to opening/closing braces in C-like languages, except that we allow leaving out the newline before a closing bracket).
+
+\end{itemize}
+
+The following example rule is formatted in two different ways according to these guidelines:
+
+\begin{center}
+\begin{minipage}{0.6\linewidth}
+\begin{lstlisting}
+rule Responder3 [role="Responder"]:
+  let X3 = senc(<Kab, A>, Kbs)
+      X4 = senc(<'c1', ~Nb>, Kab) in
+  [ !SharedKeyWithServer(B, Kbs),
+    Fr(~Nb),
+    In(X3) ]
+  --[ SessionKeyReceived(A, B, Kab, ~Nb),
+      IN_RESPONDER_3(X3),
+      OUT_RESPONDER_4(X4, ~Nb) ]->
+  [ Responder3Complete(A, B, Kab, ~Nb),
+    Out(X4) ]
+\end{lstlisting}
+\end{minipage}
+
+\begin{minipage}{0.6\linewidth}
+\begin{lstlisting}
+rule Responder3 [role="Responder"]:
+  let X3 = senc(<Kab, A>, Kbs)
+      X4 = senc(<'c1', ~Nb>, Kab) in
+  [ 
+    !SharedKeyWithServer(B, Kbs),
+    Fr(~Nb),
+    In(X3) 
+  ]
+  --[ 
+      SessionKeyReceived(A, B, Kab, ~Nb),
+      IN_RESPONDER_3(X3),
+      OUT_RESPONDER_4(X4, ~Nb) 
+  ]->
+  [ 
+    Responder3Complete(A, B, Kab, ~Nb),
+    Out(X4) 
+  ]
+\end{lstlisting}    
+\end{minipage}
+\end{center}
+
+\item Indent the statements of SAPIC+ processes as follows:
+
+\begin{itemize}
+
+    \item Place the process declaration flush left.
+
+    \item Indent every top-level statement at the same depth (one level of indentation).
+
+    \item Place each variable assignment (after the first) in a \texttt{let} statement on its own line, aligned with the previous variable assignment.
+
+    \item When an \texttt{if}, \texttt{let}, or other statement starts a block, indent the block one level.
+
+    \item Always explicitly parenthesize blocks. This is actually not necessary, but helps for clarity. The opening parenthesis should either be on the same line that opens the block, or on the next line aligned with the statement that opens the block (this is analogous to opening/closing braces in C-like languages).
+
+\end{itemize}
+
+The following example process definition is formatted in two different ways according to these guidelines:
+
+\begin{center}
+\begin{minipage}{0.7\linewidth}
+\begin{lstlisting}
+let Server() = (
+  in(<h1: host, h2:host, n:nonce>);
+  event IN_SERVER_n(<h1, h2, n>, n);
+  if (not (h1 = h2)) then (
+    let K1 = sharedkey(h1)
+        K2 = sharedkey(h2) in (
+      event SharedKeyWithServer(h1, K1);
+      event SharedKeyWithServer(h2, K2);
+      new Ks: key;
+      event SessionKeyCreated(h1, h2, Ks);
+      let omfs = senc(<Ks, h1>, K2)
+          X2 = senc(<n, h2, Ks, omfs>, K1) in (
+        event OUT_SERVER_omfs(X2, omfs);
+        out(X2);
+        event SessionKeyRevealed(h1, h2, Ks);
+        out(Ks)
+      )
+    )
+  )
+)
+\end{lstlisting}\end{minipage}
+\end{center}
+
+\begin{center}
+\begin{minipage}{0.7\linewidth}
+\begin{lstlisting}
+let Server() = 
+(
+  in(<h1: host, h2:host, n:nonce>);
+  event IN_SERVER_n(<h1, h2, n>, n);
+  if (not (h1 = h2)) then 
+  (
+    let K1 = sharedkey(h1)
+        K2 = sharedkey(h2) in 
+    (
+      event SharedKeyWithServer(h1, K1);
+      event SharedKeyWithServer(h2, K2);
+      new Ks: key;
+      event SessionKeyCreated(h1, h2, Ks);
+      let omfs = senc(<Ks, h1>, K2)
+          X2 = senc(<n, h2, Ks, omfs>, K1) in 
+      (
+        event OUT_SERVER_omfs(X2, omfs);
+        out(X2);
+        event SessionKeyRevealed(h1, h2, Ks);
+        out(Ks)
+      )
+    )
+  )
+)
+\end{lstlisting}
+\end{minipage}
+\end{center}
+
+\item Indent lemmas and restrictions as follows:
+
+\begin{itemize}
+
+    \item Place the restriction/lemma declaration flush left.
+
+    \item If specifying \texttt{all-traces} or \texttt{exists-trace}, indent the keyword one level on the line after the declaration.
+
+    \item Indent the open/close quotation marks one level, and put them each on their own line.
+
+    \item Indent and break lines in equations such that each predicate is on its own line (if it's of reasonable length), and such that, generally, all operators are on their own lines and the operands on which they operate are one indentation level deeper (or two, for the \texttt{==>} operator). An exception to this is very short predicates, which can just be left on the same line. This helps to make the logical structure of the restriction/lemma more visible.
+    
+\end{itemize}
+
+The following example lemma and restriction definitions are all formatted according to these guidelines.
+
+\begin{center}
+\begin{minipage}{0.6\linewidth}
+\begin{lstlisting}
+restriction SingleSharedKeyPerPrincipal:
+  "
+    All A #i #j.
+          KeyGen(A)@i
+        & KeyGen(A)@j
+    ==>
+        #i = #j
+  "
+\end{lstlisting}
+\end{minipage}
+\end{center}
+
+\begin{center}
+\begin{minipage}{0.9\linewidth}
+\begin{lstlisting}
+lemma Sources [sources]:
+  all-traces
+  "
+      (
+        All m n #i.
+            IN_INITIATOR_4_Kab(m, n)@i
+        ==>
+            (
+              (Ex #j. KU(n)@j & #j < #i)
+            |
+              (Ex #j. OUT_SERVER_4_Kab(m, n)@j & #j < #i)
+            )
+      )
+    &
+      (
+        All m n #i.
+            IN_INITIATOR_4_X5(m, n)@i
+        ==>
+            (
+              (Ex #j. KU(n)@j & #j < #i)
+            |
+              (Ex #j. OUT_SERVER_4_X5(m, n)@j & #j < #i)
+            )
+      )
+    &
+      (
+        All m n #i.
+            IN_INITIATOR_6_Nb(m, n)@i
+        ==>
+            (
+              (Ex #j. KU(n)@j & #j < #i)
+            |
+              (Ex #j. OUT_RESPONDER_6_Nb(m, n)@j & #j < #i)
+            )
+      )
+  "
+\end{lstlisting}
+\end{minipage}
+\end{center}
+
+\begin{center}
+\begin{minipage}{0.7\linewidth}
+\begin{lstlisting}
+lemma Executable:
+  exists-trace
+  "
+    Ex A B Ks n #i #j #k.
+        SessionKeyCreated(A, B, Ks)@i
+      &
+        SessionKeyConfirmed(A, B, Ks, n)@j
+      &
+        SessionKeyReconfirmed(A, B, Ks, n)@k
+  "
+\end{lstlisting}
+\end{minipage}
+\end{center}
+
+\end{itemize}
+
+\subsubsection{Comments}
+
+Tamarin supports C-style block (\texttt{/* \ldots */}) and line (\texttt{//}) comments. Use block comments above the declarations of rules, processes, restrictions and lemmas to explain what they are meant to do. Any parameters passed to processes should be described; Tamarin does not support a Javadoc-like syntax for documenting parameters, but you can manually approximate something like Javadoc syntax in your comments. You should also describe the facts used in rules, including any parameters they have. We have no specific recommendation (other than for above declarations, as already stated) for when to use block vs.~line comments, except that line comments should never be used in a way that creates excessively long (greater than 78 or so character) lines.
+
+\subsubsection{Restrictions}
+
+The use of restrictions should be kept to a minimum, because every restriction causes Tamarin to ignore execution traces that might actually exhibit security issues. Only use restrictions when you are \emph{absolutely sure} that they reflect real-world protocol execution conditions and do not rule out legitimate protocol executions. Even in such cases, it is generally better to attempt to help Tamarin prove your security properties without the restrictions (e.g., by adding source lemmas or by manually guiding proofs) than to add restrictions.  Every restriction added to a theory \emph{must} be carefully documented to justify its existence.
+
+\subsubsection{Lemmas}
+
+Tamarin lemmas are divided into two main types: \emph{source} lemmas and ``regular'' lemmas. Our suggested guidelines for writing these differ slightly, because of the different ways that Tamarin uses them.
+
+Tamarin uses source lemmas to help identify the possible sources of certain messages. It starts the verification process by identifying all the possible sources for input messages to each rule, so that it can reason modularly about every rule's behavior. However, in some cases it is not able to do that identification automatically and requires ``hints''; when this occurs, Tamarin reports that there are ``partial deconstructions left'' after source refinement. 
+
+These hints take the form of lemmas that, roughly, state ``if some action fact $Y$ related to a specific message $m$ occurs in the trace, either another action fact $X$ related to $m$ occurred previously in the trace, or the adversary previously derived $m$ (or some necessary component of $m$) on its own.'' Generally, $Y$ is an action fact that corresponds to the reception of $m$, and $X$ is an action fact that corresponds to the creation and sending of $m$. The canonical example of this occurs when $m$ contains a nonce; the source lemma allows Tamarin to connect the creation of the fresh nonce by some rule (or SAPIC+ statement) with the reception of that nonce by another rule (or SAPIC+ statement). 
+
+When you tell Tamarin to prove all the lemmas in a theory (e.g., when executing ``\texttt{tamarin-prover -{}-prove theory.spthy}'' on the command line), it will first prove the source lemmas inductively using the raw sources, then use them to refine the sources, and finally prove the remaining lemmas using the refined sources. However, when using Tamarin to prove one or more lemmas in a theory selectively (or interactively), Tamarin simply \emph{assumes} that all the source lemmas are valid, uses them to refine the sources, and proves the lemmas using the refined sources. It is therefore critical to ensure that the source lemmas are \emph{actually} valid by explicitly having Tamarin prove them, as they can otherwise cause unsoundness.
+
+Source lemmas almost always take the form seen above in lemma \lstinline{Sources}: a conjunction of universal quantifiers, each of which constrains every occurrence of an ``input'' action fact (in the first quantifier, \lstinline{IN_INITIATOR_4_Kab(m, n)}) to occur chronologically after either a corresponding adversary knowledge fact (\lstinline{KU(n)}) or ``output'' action fact (\lstinline{OUT_SERVER_4_Kab(m, n)}). While it is possible to provide Tamarin with multiple source lemmas in a single theory, we have found that sometimes Tamarin is unable to automatically prove multiple source lemmas individually even though it is able to prove their conjunction. Therefore, we recommend always writing a single conjunctive source lemma.
+
+With respect to regular lemmas, we recommend keeping them as simple as possible (while, of course, accurately capturing the security properties you want to prove) and building up complex lemmas from simpler ones where possible. When proving lemmas for an entire theory, Tamarin proceeds in the order they appear in the theory (except that source lemmas are always proven first, regardless of where in the theory they appear); you can therefore write foundational lemmas early in the theory and flag them with Tamarin's \lstinline{[reuse]} attribute so that they will be reused in later proofs. It can also be useful to flag a lemma with \lstinline{[hide_lemma=...]} if you explicitly do \emph{not} want its proof to reuse a particular lemma, and with \lstinline{[use_induction]} if you want Tamarin to start its proof with induction rather than simplification.
+
+The specific security properties you choose to encode in lemmas is, of course, up to you, and highly dependent on the specifics of your Tamarin theory. However, we \emph{strongly} recommend that for each protocol or subprotocol described in your theory, you have \emph{at least} an ``executability'' lemma to demonstrate that non-trivial executions of that protocol or subprotocol are possible, and that you ensure that lemma can be verified.
+
+
+\subsubsection{Theory File Structure}
+
+We encourage always structuring your Tamarin theories in a consistent fashion; for example, one consistent structuring method would be to always define all your rules (grouped by role) before your restrictions, all your restrictions before your source lemmas, and all your source lemmas before your regular lemmas. We do not have a specific recommendation about how to choose this consistent structure, other than that you should use the same structure for all the Tamarin theories in your codebase.
+
+We also encourage splitting large Tamarin theories into multiple files (for example, by subprotocol or by role; the \href{https://github.com/kemtls/Tamarin-multi-stage-model}{Core KEMTLS Tamarin Model} available on GitHub is a good example of this) and using \texttt{include} directives to reason about them together. It is generally \emph{not} the case that security properties are compositional; if you prove lemmas within multiple theories in isolation (e.g., by only including one or two of a larger set of Tamarin files), you still need to re-prove them in the fully composed theory to ensure that they remain valid. However, it may still be useful to attempt proofs of lemmas about subprotocols or individual roles in order to catch problems early.
+
+\subsubsection{Other Tips and Tricks}
+
+\begin{itemize}
+
+\item Use Tamarin's \texttt{let} statements and macros to make your theories more readable (and less prone to typographical errors). The \texttt{let} statement is a textual substitution with the scope of a single rule, while a macro is a definition (e.g., for a message type) that takes parameters and can be used globally. 
+
+\item If you run ``\texttt{tamarin-prover theory.spthy}'' on the command line, Tamarin will check the theory's syntax but not attempt to prove any lemmas. This can be useful for quick sanity checking. However, an even more useful command is ``\texttt{tamarin-prover -{}-precompute-only theory.spthy}'', which not only checks the theory's syntax but also reports the numbers of partial deconstructions both before and after source refinement. This is often almost as fast as only doing the syntax check (especially for small theories), but even when it takes a significant amount of time it provides substantially more useful information.
+
+\item There is an official \href{https://marketplace.visualstudio.com/items?itemName=tamarin-prover.tamarin-prover}{Visual Studio Code plugin for Tamarin}, which works very well for syntax highlighting and error detection on the Tamarin rules-based syntax; however, as of this writing (April 2025) it struggles with the SAPIC+ syntax, reporting both spurious syntax errors and spurious errors about action facts (SAPIC+ events) not being declared. We strongly recommend that Visual Studio Code users install the plugin and use it when writing rules-based theories, but do not recommend using it when writing SAPIC+ theories.
+
+\item It is important to remember that Tamarin is sensitive about semicolon placement. Extra semicolons (e.g., a semicolon after the last statement in a block) are treated as \emph{errors}, rather than ignored as in most languages that use semicolon statement separators.
+
+\end{itemize}
