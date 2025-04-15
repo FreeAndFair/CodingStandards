@@ -31,12 +31,11 @@ As of this writing (April 2025), unless you have a compelling reason to use SAPI
 
 \subsubsection{Naming and Typing}
 
-While Tamarin's rule-based syntax is untyped,\footnote{SAPIC+ variables can and should be typed, which is helpful both for sanity-checking SAPIC+ processes and when SAPIC+ is translated to a typed verification language like ProVerif. However, within Tamarin itself, the types are always erased in translation to Tamarin's native rules and have no effect on theory semantics.} it does require specific prefixes for certain variable sorts: \texttt{\textasciitilde} for values that are ``fresh'' (i.e., have newly-created values that are unknown to the adversary); \texttt{\$} for ``public'' values that are assumed to be known to the adversary; \texttt{\%} for natural numbers; and \texttt{\#} for temporal values (the timepoints at which events occur). It is essential to use these prefixes correctly; a security proof carried out on a rule set where a value that should be public was not marked public, for example, may turn out to be incorrect.
+While Tamarin's rule-based syntax is untyped,\footnote{SAPIC+ variables can and should be typed, which is helpful both for sanity-checking SAPIC+ processes and when SAPIC+ is translated to a typed verification language like ProVerif. However, within Tamarin itself, the types are always erased in translation to Tamarin's native rules and have no effect on theory semantics.} it does require specific prefixes for certain variable sorts: \texttt{\textasciitilde}~for values that are ``fresh'' (i.e., have newly-created values that are unknown to the adversary); \texttt{\$}~for ``public'' values that are assumed to be known to the adversary; \texttt{\%}~for natural numbers; and \texttt{\#}~for temporal values (the timepoints at which events occur). It is essential to use these prefixes correctly; a security proof carried out on a rule set where a value that should be public was not marked public, for example, may turn out to be incorrect.
 
 After the required prefixes, Tamarin is quite flexible with respect to identifier names; they must start with a letter or number, can contain underscores after the first character, can be of arbitrary length, and cannot be Tamarin reserved words.
 
 Our recommendations for identifier naming in Tamarin are as follows:
-
 \begin{itemize}
 
 \item Use single capital letters or capitalized words, or the same with underscore/number ``subscripts'', for variables that represent the identities of individual protocol actors. These should be meaningful (e.g., \texttt{A} or \texttt{Alice} for Alice, \texttt{V\_1} or \texttt{Voter\_1} for Voter \#1) and consistent (i.e., the same identifier is used for the same actor, or role, every time it is referenced). 
