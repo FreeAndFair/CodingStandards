@@ -305,6 +305,8 @@ Source lemmas almost always take the form seen above in lemma \lstinline{Sources
 
 With respect to regular lemmas, we recommend keeping them as simple as possible (while, of course, accurately capturing the security properties you want to prove) and building up complex lemmas from simpler ones where possible. When proving lemmas for an entire theory, Tamarin proceeds in the order they appear in the theory; you can write foundational lemmas early in the theory and flag them with Tamarin's \lstinline{[reuse]} attribute so that they will be reused in later proofs. It can also be useful to flag a lemma with \lstinline{[hide_lemma=...]} if you explicitly do \emph{not} want its proof to reuse a particular lemma, and with \lstinline{[use_induction]} if you want Tamarin to start its proof with induction rather than simplification.
 
+The specific security properties you choose to encode in lemmas is, of course, up to you, and highly dependent on the specifics of your Tamarin theory. However, we \emph{strongly} recommend that for each protocol or subprotocol described in your theory, you have \emph{at least} an ``executability'' lemma to demonstrate that non-trivial executions of that protocol or subprotocol are possible, and that you ensure that lemma can be verified.
+
 \subsubsection{Other Tips and Tricks}
 
 \begin{itemize}
