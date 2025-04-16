@@ -307,9 +307,18 @@ With respect to regular lemmas, we recommend keeping them as simple as possible 
 
 The specific security properties you choose to encode in lemmas is, of course, up to you, and highly dependent on the specifics of your Tamarin theory. However, we \emph{strongly} recommend that for each protocol or subprotocol described in your theory, you have \emph{at least} an ``executability'' lemma to demonstrate that non-trivial executions of that protocol or subprotocol are possible, and that you ensure that lemma can be verified.
 
+
+\subsubsection{Theory File Structure}
+
+We encourage always structuring your Tamarin theories in a consistent fashion; for example, one consistent structuring method would be to always define all your rules (grouped by role) before your restrictions, all your restrictions before your source lemmas, and all your source lemmas before your regular lemmas. We do not have a specific recommendation about how to choose this consistent structure, other than that you should use the same structure for all the Tamarin theories in your codebase.
+
+We also encourage splitting large Tamarin theories into multiple files (for example, by subprotocol or by role; the \href{https://github.com/kemtls/Tamarin-multi-stage-model}{Core KEMTLS Tamarin Model} available on GitHub is a good example of this) and using \texttt{include} directives to reason about them together. It is generally \emph{not} the case that security properties are compositional; if you prove lemmas within multiple theories in isolation (e.g., by only including one or two of a larger set of Tamarin files), you still need to re-prove them in the fully composed theory to ensure that they remain valid. However, it may still be useful to attempt proofs of lemmas about subprotocols or individual roles in order to catch problems early.
+
 \subsubsection{Other Tips and Tricks}
 
 \begin{itemize}
+
+\item Use Tamarin's \texttt{let} statements and macros to make your theories more readable (and less prone to typographical errors). The \texttt{let} statement is a textual substitution with the scope of a single rule, while a macro is a definition (e.g., for a message type) that takes parameters and can be used globally. 
 
 \item If you run ``\texttt{tamarin-prover theory.spthy}'' on the command line, Tamarin will check the theory's syntax but not attempt to prove any lemmas. This can be useful for quick sanity checking. However, an even more useful command is ``\texttt{tamarin-prover -{}-precompute-only theory.spthy}'', which not only checks the theory's syntax but also reports the numbers of partial deconstructions both before and after source refinement. This is often almost as fast as only doing the syntax check (especially for small theories), but even when it takes a significant amount of time it provides substantially more useful information.
 
