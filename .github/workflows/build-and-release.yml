@@ -19,9 +19,6 @@ jobs:
     name: Build Coding Standards and Update Release
     runs-on: ubuntu-latest
     steps:
-      - name: Install Packages
-        run: sudo apt-get install build-essential epstool
-
       - name: Install/Restore TeXLive Environment
         uses: FreeAndFair/setup-texlive-action@v3
         with:
